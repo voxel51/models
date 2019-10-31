@@ -12,7 +12,7 @@ The [tutorials folder](tutorials) is a collection of models described in the [Te
 
 # Update instructions
 
-If you would like to get all new updates from [the official repository](https://github.com/tensorflow/models), you may clone that repository and run the following commands to return to the slimmed down state that this repository is in:
+If you would like to get all new updates from [the official repository](https://github.com/tensorflow/models), you may clone it and run the following commands to return to the slimmed down state that this repository is in:
 
 ``` bash
 rm -rf samples
