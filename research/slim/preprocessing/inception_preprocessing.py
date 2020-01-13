@@ -96,15 +96,15 @@ def distort_color(image, color_ordering=0, fast_mode=True, scope=None,
           raise ValueError('color_ordering must be in [0, 3]')
       else:
         if color_ordering == 0:
-            image = tf.image.random_brightness(image, max_delta=64. / 255.)
-            image = tf.image.random_saturation(image, lower=0.125, upper=4.0)
-            image = tf.image.random_hue(image, max_delta=0.5)
-            image = tf.image.random_contrast(image, lower=0.125, upper=4.0)
+          image = tf.image.random_brightness(image, max_delta=64. / 255.)
+          image = tf.image.random_saturation(image, lower=0.125, upper=4.0)
+          image = tf.image.random_hue(image, max_delta=0.5)
+          image = tf.image.random_contrast(image, lower=0.125, upper=4.0)
         elif color_ordering == 1:
-            image = tf.image.random_saturation(image, lower=0.125, upper=4.0)
-            image = tf.image.random_brightness(image, max_delta=64. / 255.)
-            image = tf.image.random_contrast(image, lower=0.125, upper=4.0)
-            image = tf.image.random_hue(image, max_delta=0.5)
+          image = tf.image.random_saturation(image, lower=0.125, upper=4.0)
+          image = tf.image.random_brightness(image, max_delta=64. / 255.)
+          image = tf.image.random_contrast(image, lower=0.125, upper=4.0)
+          image = tf.image.random_hue(image, max_delta=0.5)
         elif color_ordering == 2:
           image = tf.image.random_contrast(image, lower=0.125, upper=4.0)
           image = tf.image.random_hue(image, max_delta=0.5)
@@ -350,7 +350,9 @@ def preprocess_image(image,
                      bbox=None,
                      fast_mode=True,
                      add_image_summaries=True,
-                     crop_image=True):
+                     crop_image=True,
+                     random_horizontal_flip=True,
+                     color_distortion="fast"):
   """Pre-process one image for training or evaluation.
 
   Args:
@@ -385,6 +387,8 @@ def preprocess_image(image,
         bbox,
         fast_mode,
         add_image_summaries=add_image_summaries,
-        random_crop=crop_image)
+        random_crop=crop_image,
+        random_horizontal_flip=random_horizontal_flip,
+        color_distortion=color_distortion)
   else:
     return preprocess_for_eval(image, height, width, central_crop=crop_image)
