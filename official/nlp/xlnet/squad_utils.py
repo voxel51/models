@@ -23,6 +23,8 @@ import collections
 import gc
 import json
 import math
+import os
+import pickle
 import re
 import string
 
@@ -35,11 +37,6 @@ from official.nlp.xlnet import data_utils
 from official.nlp.xlnet import preprocess_utils
 
 SPIECE_UNDERLINE = u"▁"
-
-SEG_ID_P = 0
-SEG_ID_Q = 1
-SEG_ID_CLS = 2
-SEG_ID_PAD = 3
 
 
 class InputFeatures(object):
@@ -705,28 +702,28 @@ def convert_examples_to_features(examples, sp_model, max_seq_length, doc_stride,
                                                split_token_index)
         token_is_max_context[len(tokens)] = is_max_context
         tokens.append(all_doc_tokens[split_token_index])
-        segment_ids.append(SEG_ID_P)
+        segment_ids.append(data_utils.SEG_ID_P)
         p_mask.append(0)
 
       paragraph_len = len(tokens)
 
       tokens.append(data_utils.SEP_ID)
-      segment_ids.append(SEG_ID_P)
+      segment_ids.append(data_utils.SEG_ID_P)
       p_mask.append(1)
 
       # note(zhiliny): we put P before Q
       # because during pretraining, B is always shorter than A
       for token in query_tokens:
         tokens.append(token)
-        segment_ids.append(SEG_ID_Q)
+        segment_ids.append(data_utils.SEG_ID_Q)
         p_mask.append(1)
       tokens.append(data_utils.SEP_ID)
-      segment_ids.append(SEG_ID_Q)
+      segment_ids.append(data_utils.SEG_ID_Q)
       p_mask.append(1)
 
       cls_index = len(segment_ids)
       tokens.append(data_utils.CLS_ID)
-      segment_ids.append(SEG_ID_CLS)
+      segment_ids.append(data_utils.SEG_ID_CLS)
       p_mask.append(0)
 
       input_ids = tokens
@@ -739,7 +736,7 @@ def convert_examples_to_features(examples, sp_model, max_seq_length, doc_stride,
       while len(input_ids) < max_seq_length:
         input_ids.append(0)
         input_mask.append(1)
-        segment_ids.append(SEG_ID_PAD)
+        segment_ids.append(data_utils.SEG_ID_PAD)
         p_mask.append(1)
 
       assert len(input_ids) == max_seq_length
@@ -927,3 +924,50 @@ class FeatureWriter(object):
 
   def close(self):
     self._writer.close()
+
+
+def create_eval_data(spm_basename,
+                     sp_model,
+                     eval_examples,
+                     max_seq_length,
+                     max_query_length,
+                     doc_stride,
+                     uncased,
+                     output_dir=None):
+  """Creates evaluation tfrecords."""
+  eval_features = []
+  eval_writer = None
+  if output_dir:
+    eval_rec_file = os.path.join(
+        output_dir,
+        "{}.slen-{}.qlen-{}.eval.tf_record".format(spm_basename, max_seq_length,
+                                                   max_query_length))
+    eval_feature_file = os.path.join(
+        output_dir,
+        "{}.slen-{}.qlen-{}.eval.features.pkl".format(spm_basename,
+                                                      max_seq_length,
+                                                      max_query_length))
+
+    eval_writer = FeatureWriter(filename=eval_rec_file, is_training=False)
+
+  def append_feature(feature):
+    eval_features.append(feature)
+    if eval_writer:
+      eval_writer.process_feature(feature)
+
+  convert_examples_to_features(
+      examples=eval_examples,
+      sp_model=sp_model,
+      max_seq_length=max_seq_length,
+      doc_stride=doc_stride,
+      max_query_length=max_query_length,
+      is_training=False,
+      output_fn=append_feature,
+      uncased=uncased)
+
+  if eval_writer:
+    eval_writer.close()
+    with tf.io.gfile.GFile(eval_feature_file, "wb") as fout:
+      pickle.dump(eval_features, fout)
+
+  return eval_features

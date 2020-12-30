@@ -14,15 +14,18 @@
 # ==============================================================================
 """Common TF utilities."""
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
-import math
 import six
 import tensorflow as tf
 
+from tensorflow.python.util import deprecation
+from official.modeling import activations
 
+
+@deprecation.deprecated(
+    None,
+    "tf.keras.layers.Layer supports multiple positional args and kwargs as "
+    "input tensors. pack/unpack inputs to override __call__ is no longer "
+    "needed.")
 def pack_inputs(inputs):
   """Pack a list of `inputs` tensors to a tuple.
 
@@ -43,6 +46,11 @@ def pack_inputs(inputs):
   return tuple(outputs)
 
 
+@deprecation.deprecated(
+    None,
+    "tf.keras.layers.Layer supports multiple positional args and kwargs as "
+    "input tensors. pack/unpack inputs to override __call__ is no longer "
+    "needed.")
 def unpack_inputs(inputs):
   """unpack a tuple of `inputs` tensors to a tuple.
 
@@ -74,55 +82,32 @@ def is_special_none_tensor(tensor):
   return tensor.shape.ndims == 0 and tensor.dtype == tf.int32
 
 
-def gelu(x):
-  """Gaussian Error Linear Unit.
-
-  This is a smoother version of the RELU.
-  Original paper: https://arxiv.org/abs/1606.08415
-  Args:
-    x: float Tensor to perform activation.
-
-  Returns:
-    `x` with the GELU activation applied.
-  """
-  cdf = 0.5 * (1.0 + tf.tanh(
-      (math.sqrt(2 / math.pi) * (x + 0.044715 * tf.pow(x, 3)))))
-  return x * cdf
-
-
 def get_activation(identifier):
-  """Maps a string to a Python function, e.g., "relu" => `tf.nn.relu`.
+  """Maps a identifier to a Python function, e.g., "relu" => `tf.nn.relu`.
+
+  It checks string first and if it is one of customized activation not in TF,
+  the corresponding activation will be returned. For non-customized activation
+  names and callable identifiers, always fallback to tf.keras.activations.get.
 
   Args:
-    identifier: String name of the activation function.
+    identifier: String name of the activation function or callable.
 
   Returns:
-    A Python function corresponding to the activation function. If
-    `identifier` is None, empty, or "linear", this will return None.
-    If `identifier` is not a string, it will return `identifier`.
-
-  Raises:
-    ValueError: The `identifier` does not correspond to a known
-      activation.
+    A Python function corresponding to the activation function.
   """
-  if identifier is None:
-    return None
-  elif isinstance(identifier, six.string_types):
+  if isinstance(identifier, six.string_types):
     name_to_fn = {
-        "linear": None,
-        "relu": tf.nn.relu,
-        "gelu": gelu,
-        "tanh": tf.nn.tanh,
+        "gelu": activations.gelu,
+        "simple_swish": activations.simple_swish,
+        "hard_swish": activations.hard_swish,
+        "relu6": activations.relu6,
+        "hard_sigmoid": activations.hard_sigmoid,
+        "identity": activations.identity,
     }
     identifier = str(identifier).lower()
-    if identifier not in name_to_fn:
-      raise ValueError("Unsupported activation function: %s" % (identifier))
-    return name_to_fn[identifier]
-  elif callable(identifier):
-    return identifier
-  else:
-    raise ValueError("Could not interpret activation "
-                     "function identifier: %s" % (identifier))
+    if identifier in name_to_fn:
+      return tf.keras.activations.get(name_to_fn[identifier])
+  return tf.keras.activations.get(identifier)
 
 
 def get_shape_list(tensor, expected_rank=None, name=None):
@@ -183,3 +168,18 @@ def assert_rank(tensor, expected_rank, name=None):
         "For the tensor `%s`, the actual tensor rank `%d` (shape = %s) is not "
         "equal to the expected tensor rank `%s`" %
         (name, actual_rank, str(tensor.shape), str(expected_rank)))
+
+
+def safe_mean(losses):
+  """Computes a safe mean of the losses.
+
+  Args:
+    losses: `Tensor` whose elements contain individual loss measurements.
+
+  Returns:
+    A scalar representing the mean of `losses`. If `num_present` is zero,
+      then zero is returned.
+  """
+  total = tf.reduce_sum(losses)
+  num_elements = tf.cast(tf.size(losses), dtype=losses.dtype)
+  return tf.math.divide_no_nan(total, num_elements)

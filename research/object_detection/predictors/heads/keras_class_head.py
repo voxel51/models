@@ -19,9 +19,10 @@ Contains Class prediction head classes for different meta architectures.
 All the class prediction heads have a predict function that receives the
 `features` as the first argument and returns class predictions with background.
 """
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 from object_detection.predictors.heads import head
+from object_detection.utils import shape_utils
 
 
 class ConvolutionalClassHead(head.KerasHead):
@@ -71,7 +72,11 @@ class ConvolutionalClassHead(head.KerasHead):
 
     Raises:
       ValueError: if min_depth > max_depth.
+      ValueError: if use_depthwise is True and kernel_size is 1.
     """
+    if use_depthwise and (kernel_size == 1):
+      raise ValueError('Should not use 1x1 kernel when using depthwise conv')
+
     super(ConvolutionalClassHead, self).__init__(name=name)
     self._is_training = is_training
     self._use_dropout = use_dropout
@@ -274,9 +279,16 @@ class WeightSharedConvolutionalClassHead(head.KerasHead):
         num_class_slots].
       name: A string name scope to assign to the model. If `None`, Keras
         will auto-generate one from the class name.
+
+    Raises:
+      ValueError: if use_depthwise is True and kernel_size is 1.
     """
+    if use_depthwise and (kernel_size == 1):
+      raise ValueError('Should not use 1x1 kernel when using depthwise conv')
+
     super(WeightSharedConvolutionalClassHead, self).__init__(name=name)
     self._num_class_slots = num_class_slots
+    self._num_predictions_per_location = num_predictions_per_location
     self._kernel_size = kernel_size
     self._class_prediction_bias_init = class_prediction_bias_init
     self._use_dropout = use_dropout
@@ -329,13 +341,23 @@ class WeightSharedConvolutionalClassHead(head.KerasHead):
     for layer in self._class_predictor_layers:
       class_predictions_with_background = layer(
           class_predictions_with_background)
-    batch_size = features.get_shape().as_list()[0]
-    if batch_size is None:
-      batch_size = tf.shape(features)[0]
+    batch_size, height, width = shape_utils.combined_static_and_dynamic_shape(
+        features)[0:3]
+    class_predictions_with_background = tf.reshape(
+        class_predictions_with_background, [
+            batch_size, height, width, self._num_predictions_per_location,
+            self._num_class_slots
+        ])
     class_predictions_with_background = self._score_converter_fn(
         class_predictions_with_background)
     if self._return_flat_predictions:
       class_predictions_with_background = tf.reshape(
           class_predictions_with_background,
           [batch_size, -1, self._num_class_slots])
+    else:
+      class_predictions_with_background = tf.reshape(
+          class_predictions_with_background, [
+              batch_size, height, width,
+              self._num_predictions_per_location * self._num_class_slots
+          ])
     return class_predictions_with_background
