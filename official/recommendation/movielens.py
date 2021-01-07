@@ -27,11 +27,12 @@ import tempfile
 import zipfile
 
 # pylint: disable=g-bad-import-order
+# Import libraries
 import numpy as np
 import pandas as pd
 import six
 from six.moves import urllib  # pylint: disable=redefined-builtin
-from absl import app as absl_app
+from absl import app
 from absl import flags
 from absl import logging
 import tensorflow as tf
@@ -83,6 +84,8 @@ NUM_RATINGS = {
     ML_1M: 1000209,
     ML_20M: 20000263
 }
+
+DATASET_TO_NUM_USERS_AND_ITEMS = {ML_1M: (6040, 3706), ML_20M: (138493, 26744)}
 
 
 def _download_and_clean(dataset, data_dir):
@@ -151,7 +154,7 @@ def _transform_csv(input_path, output_path, names, skip_first, separator=","):
     separator: Character used to separate fields in the raw csv.
   """
   if six.PY2:
-    names = [n.decode("utf-8") for n in names]
+    names = [six.ensure_text(n, "utf-8") for n in names]
 
   with tf.io.gfile.GFile(output_path, "wb") as f_out, \
       tf.io.gfile.GFile(input_path, "rb") as f_in:
@@ -163,7 +166,7 @@ def _transform_csv(input_path, output_path, names, skip_first, separator=","):
       if i == 0 and skip_first:
         continue  # ignore existing labels in the csv
 
-      line = line.decode("utf-8", errors="ignore")
+      line = six.ensure_text(line, "utf-8", errors="ignore")
       fields = line.split(separator)
       if separator != ",":
         fields = ['"{}"'.format(field) if "," in field else field
@@ -284,17 +287,24 @@ def integerize_genres(dataframe):
   return dataframe
 
 
+def define_flags():
+  """Add flags specifying data usage arguments."""
+  flags.DEFINE_enum(
+      name="dataset",
+      default=None,
+      enum_values=DATASETS,
+      case_sensitive=False,
+      help=flags_core.help_wrap("Dataset to be trained and evaluated."))
+
+
 def define_data_download_flags():
-  """Add flags specifying data download arguments."""
+  """Add flags specifying data download and usage arguments."""
   flags.DEFINE_string(
       name="data_dir", default="/tmp/movielens-data/",
       help=flags_core.help_wrap(
           "Directory to download and extract data."))
 
-  flags.DEFINE_enum(
-      name="dataset", default=None,
-      enum_values=DATASETS, case_sensitive=False,
-      help=flags_core.help_wrap("Dataset to be trained and evaluated."))
+  define_flags()
 
 
 def main(_):
@@ -305,4 +315,4 @@ def main(_):
 if __name__ == "__main__":
   define_data_download_flags()
   FLAGS = flags.FLAGS
-  absl_app.run(main)
+  app.run(main)
